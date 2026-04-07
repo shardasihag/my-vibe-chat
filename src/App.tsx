@@ -90,7 +90,7 @@ export default function App() {
   const chatRef = useRef<any>(null);
 
   const initChat = (key: string) => {
-    const activeKey = key || process.env.GEMINI_API_KEY || '';
+    const activeKey = key || (import.meta as any).env.VITE_GEMINI_API_KEY || '';
     if (!activeKey) return;
 
     try {
@@ -133,12 +133,20 @@ export default function App() {
     setIsLoading(true);
 
     try {
+      // Lazy initialization inside the handler
       if (!chatRef.current) {
-        initChat(apiKey);
-      }
-      
-      if (!chatRef.current) {
-        throw new Error("API Key required. Please set it in Settings.");
+        const activeKey = apiKey || (import.meta as any).env.VITE_GEMINI_API_KEY || '';
+        if (!activeKey) {
+          throw new Error("API Key required. Please set VITE_GEMINI_API_KEY or use Settings.");
+        }
+        
+        const ai = new GoogleGenAI({ apiKey: activeKey });
+        chatRef.current = ai.chats.create({
+          model: "gemini-3-flash-preview",
+          config: {
+            systemInstruction: SYSTEM_INSTRUCTION,
+          },
+        });
       }
 
       const response = await chatRef.current.sendMessage({ message: input });
@@ -150,13 +158,23 @@ export default function App() {
       };
       setMessages(prev => [...prev, modelMessage]);
     } catch (error: any) {
-      console.error("Chat Error:", error);
+      console.error("Chat Error Detail:", error);
+      
+      let displayError = "I encountered a technical blocker while processing your request.";
+      
+      // Extract more detail if available (e.g., 403, 404)
+      if (error.message) {
+        if (error.message.includes("API Key")) {
+          displayError = error.message;
+        } else {
+          displayError = `Error: ${error.message}`;
+        }
+      }
+      
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'model',
-        content: error.message?.includes("API Key") 
-          ? error.message 
-          : "I encountered a technical blocker while processing your request. Let's try that again.",
+        content: displayError,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMessage]);
