@@ -13,7 +13,10 @@ import {
   Clock,
   Briefcase,
   Award,
-  ChevronRight
+  ChevronRight,
+  Settings,
+  X,
+  Key
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
@@ -83,21 +86,32 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [apiKey, setApiKey] = useState<string>(() => localStorage.getItem('gemini_api_key') || '');
 
   // Initialize Gemini
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
   const chatRef = useRef<any>(null);
 
-  useEffect(() => {
-    if (!chatRef.current) {
+  const initChat = (key: string) => {
+    const activeKey = key || process.env.GEMINI_API_KEY || '';
+    if (!activeKey) return;
+
+    try {
+      const ai = new GoogleGenAI({ apiKey: activeKey });
       chatRef.current = ai.chats.create({
         model: "gemini-3-flash-preview",
         config: {
           systemInstruction: SYSTEM_INSTRUCTION,
         },
       });
+    } catch (err) {
+      console.error("Failed to initialize Gemini:", err);
     }
-  }, []);
+  };
+
+  useEffect(() => {
+    initChat(apiKey);
+  }, [apiKey]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -122,6 +136,14 @@ export default function App() {
     setIsLoading(true);
 
     try {
+      if (!chatRef.current) {
+        initChat(apiKey);
+      }
+      
+      if (!chatRef.current) {
+        throw new Error("API Key required. Please set it in Settings.");
+      }
+
       const response = await chatRef.current.sendMessage({ message: input });
       const modelMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -153,12 +175,13 @@ export default function App() {
         timestamp: new Date(),
       }
     ]);
-    chatRef.current = ai.chats.create({
-      model: "gemini-3-flash-preview",
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-      },
-    });
+    initChat(apiKey);
+  };
+
+  const saveApiKey = (newKey: string) => {
+    localStorage.setItem('gemini_api_key', newKey);
+    setApiKey(newKey);
+    setIsSettingsOpen(false);
   };
 
   return (
@@ -185,6 +208,11 @@ export default function App() {
             <SidebarItem icon={<Calendar size={18} />} label="Timeline & Milestones" />
             <SidebarItem icon={<CheckCircle2 size={18} />} label="Task Management" />
             <SidebarItem icon={<Clock size={18} />} label="Resource Allocation" />
+            <SidebarItem 
+              icon={<Settings size={18} />} 
+              label="Settings" 
+              onClick={() => setIsSettingsOpen(true)} 
+            />
           </nav>
 
           <div className="mt-auto pt-6 border-t border-gray-100">
@@ -346,13 +374,85 @@ export default function App() {
           </div>
         </div>
       </main>
+
+      {/* Settings Modal */}
+      <AnimatePresence>
+        {isSettingsOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSettingsOpen(false)}
+              className="absolute inset-0 bg-black/20 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md glass rounded-3xl apple-shadow overflow-hidden"
+            >
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                      <Settings size={20} />
+                    </div>
+                    <h2 className="text-xl font-semibold">Settings</h2>
+                  </div>
+                  <button 
+                    onClick={() => setIsSettingsOpen(false)}
+                    className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                  >
+                    <X size={20} className="text-gray-400" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 px-1">
+                      Gemini API Key
+                    </label>
+                    <div className="relative">
+                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                        <Key size={16} />
+                      </div>
+                      <input
+                        type="password"
+                        defaultValue={apiKey}
+                        placeholder="Enter your API key..."
+                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-3 pl-11 pr-4 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none"
+                        onBlur={(e) => saveApiKey(e.target.value)}
+                      />
+                    </div>
+                    <p className="mt-3 text-[11px] text-gray-500 leading-relaxed px-1">
+                      Your API key is stored locally in your browser. It is used to authenticate requests to the Gemini API.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-8">
+                  <button
+                    onClick={() => setIsSettingsOpen(false)}
+                    className="w-full bg-blue-600 text-white font-semibold py-3 rounded-2xl hover:bg-blue-700 transition-colors apple-shadow"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-function SidebarItem({ icon, label, active = false }: { icon: React.ReactNode, label: string, active?: boolean }) {
+function SidebarItem({ icon, label, active = false, onClick }: { icon: React.ReactNode, label: string, active?: boolean, onClick?: () => void }) {
   return (
-    <button className={cn(
+    <button 
+      onClick={onClick}
+      className={cn(
       "flex items-center gap-3 w-full p-3 rounded-xl transition-all duration-200 group",
       active 
         ? "bg-blue-600 text-white apple-shadow" 
