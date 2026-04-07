@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { 
   Send, 
   User, 
@@ -90,17 +90,15 @@ export default function App() {
   const chatRef = useRef<any>(null);
 
   const initChat = (key: string) => {
-    const activeKey = key || (import.meta as any).env.VITE_GEMINI_API_KEY || '';
+    const activeKey = key || (import.meta as any).env.VITE_GEMINI_API_KEY;
     if (!activeKey) return;
 
     try {
-      const ai = new GoogleGenAI({ apiKey: activeKey });
-      chatRef.current = ai.chats.create({
+      const genAI = new GoogleGenerativeAI(activeKey);
+      chatRef.current = genAI.getGenerativeModel({
         model: "gemini-3-flash-preview",
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
-        },
-      });
+        systemInstruction: SYSTEM_INSTRUCTION,
+      }).startChat();
     } catch (err) {
       console.error("Failed to initialize Gemini:", err);
     }
@@ -133,27 +131,28 @@ export default function App() {
     setIsLoading(true);
 
     try {
-      // Lazy initialization inside the handler
+      // Lazy initialization inside the handler matching user requested pattern
       if (!chatRef.current) {
-        const activeKey = apiKey || (import.meta as any).env.VITE_GEMINI_API_KEY || '';
+        const activeKey = apiKey || (import.meta as any).env.VITE_GEMINI_API_KEY;
         if (!activeKey) {
-          throw new Error("API Key required. Please set VITE_GEMINI_API_KEY or use Settings.");
+          throw new Error("API Key is missing. Please set VITE_GEMINI_API_KEY or use Settings.");
         }
         
-        const ai = new GoogleGenAI({ apiKey: activeKey });
-        chatRef.current = ai.chats.create({
+        const genAI = new GoogleGenerativeAI(activeKey);
+        chatRef.current = genAI.getGenerativeModel({
           model: "gemini-3-flash-preview",
-          config: {
-            systemInstruction: SYSTEM_INSTRUCTION,
-          },
-        });
+          systemInstruction: SYSTEM_INSTRUCTION,
+        }).startChat();
       }
 
-      const response = await chatRef.current.sendMessage({ message: input });
+      const result = await chatRef.current.sendMessage(input);
+      const response = await result.response;
+      const text = response.text();
+      
       const modelMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'model',
-        content: response.text || "I'm sorry, I couldn't process that request.",
+        content: text || "I'm sorry, I couldn't process that request.",
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, modelMessage]);
@@ -162,13 +161,9 @@ export default function App() {
       
       let displayError = "I encountered a technical blocker while processing your request.";
       
-      // Extract more detail if available (e.g., 403, 404)
+      // Extract more detail if available (e.g., 400, 403, 404)
       if (error.message) {
-        if (error.message.includes("API Key")) {
-          displayError = error.message;
-        } else {
-          displayError = `Error: ${error.message}`;
-        }
+        displayError = `Error: ${error.message}`;
       }
       
       const errorMessage: Message = {
