@@ -8,10 +8,7 @@ import {
   Trash2, 
   Plus, 
   Layout, 
-  Calendar, 
-  CheckCircle2, 
-  Clock,
-  Briefcase,
+  MessageSquare,
   Award,
   ChevronRight,
   Settings,
@@ -27,7 +24,7 @@ import { cn } from './lib/utils';
 const SYSTEM_INSTRUCTION = `You are Sharda Kumari, a PMP-certified Project Delivery Lead with over 7 years of experience in delivering SaaS and enterprise software solutions. 
 
 Professional Background:
-- Currently a Project Delivery Lead (since Nov 2024), leading 4+ concurrent enterprise projects and cross-functional teams of 10+ members.
+- Currently a Project Delivery Lead, leading 4+ concurrent enterprise projects and cross-functional teams of 10+ members.
 - Previously served as a Project Manager & Sr. Business Analyst, where you led the development of a Work Management SaaS product.
 - Former Project Coordinator, managing web and mobile development projects.
 - Started your career as a Business Analyst and Business Relationship Manager.
@@ -55,8 +52,8 @@ Education:
 - Bachelor’s Degree in Business Administration from APG Shimla University.
 
 Tone and Style:
-- Professional, organized, and results-driven.
-- Keep your answers short and concise (maximum 150-200 words).
+- Professional, organized, and results-driven (when applicable).
+- Keep your answers very short and concise.
 - Use project management terminology naturally (e.g., critical path, stakeholders, velocity, retrospectives).
 - Provide strategic, action-oriented advice.
 - Maintain a supportive and authoritative persona.
@@ -152,12 +149,14 @@ export default function App() {
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, modelMessage]);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Chat Error:", error);
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'model',
-        content: "I encountered a technical blocker while processing your request. Let's try that again.",
+        content: error.message?.includes("API Key") 
+          ? error.message 
+          : "I encountered a technical blocker while processing your request. Let's try that again.",
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -169,12 +168,13 @@ export default function App() {
   const clearChat = () => {
     setMessages([
       {
-        id: 'welcome',
+        id: `welcome-${Date.now()}`,
         role: 'model',
         content: "Hello! I'm Sharda Kumari, how can I assist you today?",
         timestamp: new Date(),
       }
     ]);
+    setInput('');
     initChat(apiKey);
   };
 
@@ -193,36 +193,29 @@ export default function App() {
         className="hidden md:flex flex-col glass border-r border-gray-200 z-20 overflow-hidden"
       >
         <div className="p-6 flex flex-col h-full">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-12 h-12 rounded-2xl bg-white apple-shadow flex items-center justify-center text-blue-600">
-              <Briefcase size={24} />
-            </div>
-            <div>
-              <h1 className="font-semibold text-lg tracking-tight">Sharda Kumari</h1>
-              <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">PMP Project Manager</p>
-            </div>
-          </div>
-
           <nav className="flex-1 space-y-2">
-            <SidebarItem icon={<Layout size={18} />} label="Project Dashboard" active />
-            <SidebarItem icon={<Calendar size={18} />} label="Timeline & Milestones" />
-            <SidebarItem icon={<CheckCircle2 size={18} />} label="Task Management" />
-            <SidebarItem icon={<Clock size={18} />} label="Resource Allocation" />
+            <SidebarItem 
+              icon={<MessageSquare size={18} />} 
+              label="Chat" 
+              active 
+              onClick={() => {}} 
+            />
+          </nav>
+
+          <div className="mt-auto pt-6 border-t border-gray-100 space-y-2">
+            <SidebarItem 
+              icon={<Trash2 size={18} />} 
+              label="Clear Chat" 
+              onClick={clearChat} 
+            />
             <SidebarItem 
               icon={<Settings size={18} />} 
               label="Settings" 
               onClick={() => setIsSettingsOpen(true)} 
             />
-          </nav>
-
-          <div className="mt-auto pt-6 border-t border-gray-100">
-            <button 
-              onClick={clearChat}
-              className="flex items-center gap-3 w-full p-3 rounded-xl text-gray-500 hover:bg-red-50 hover:text-red-600 transition-all duration-200 group"
-            >
-              <Trash2 size={18} className="group-hover:scale-110 transition-transform" />
-              <span className="text-sm font-medium">Reset Session</span>
-            </button>
+            <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider text-center pt-4">
+              Sharda Kumari • PMP AI
+            </p>
           </div>
         </div>
       </motion.aside>
@@ -240,7 +233,7 @@ export default function App() {
             </button>
             <div className="flex items-center gap-3 md:hidden">
               <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white">
-                <Briefcase size={16} />
+                <MessageSquare size={16} />
               </div>
               <span className="font-semibold text-sm">Sharda Kumari</span>
             </div>
@@ -251,11 +244,19 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-2">
-            <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500">
+            <button 
+              onClick={clearChat}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500"
+              title="New Chat"
+            >
               <Plus size={20} />
             </button>
-            <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500">
-              <MoreHorizontal size={20} />
+            <button 
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500"
+              title="Settings"
+            >
+              <Settings size={20} />
             </button>
           </div>
         </header>
