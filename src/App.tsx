@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { 
   Send, 
   User, 
@@ -13,7 +13,9 @@ import {
   ChevronRight,
   Settings,
   X,
-  Key
+  Key,
+  ThumbsUp,
+  ThumbsDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
@@ -66,6 +68,7 @@ interface Message {
   role: 'user' | 'model';
   content: string;
   timestamp: Date;
+  feedback?: 'up' | 'down';
 }
 
 // --- Components ---
@@ -90,15 +93,17 @@ export default function App() {
   const chatRef = useRef<any>(null);
 
   const initChat = (key: string) => {
-    const activeKey = key || (import.meta as any).env.VITE_GEMINI_API_KEY;
+    const activeKey = key || (import.meta as any).env.VITE_GEMINI_API_KEY || (process as any).env.GEMINI_API_KEY;
     if (!activeKey) return;
 
     try {
-      const genAI = new GoogleGenerativeAI(activeKey);
-      chatRef.current = genAI.getGenerativeModel({
-        model: "gemini-3-flash-preview",
-        systemInstruction: SYSTEM_INSTRUCTION,
-      }).startChat();
+      const ai = new GoogleGenAI({ apiKey: activeKey });
+      chatRef.current = ai.chats.create({
+        model: "gemini-3.1-flash-lite-preview",
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+        },
+      });
     } catch (err) {
       console.error("Failed to initialize Gemini:", err);
     }
@@ -133,21 +138,22 @@ export default function App() {
     try {
       // Lazy initialization inside the handler matching user requested pattern
       if (!chatRef.current) {
-        const activeKey = apiKey || (import.meta as any).env.VITE_GEMINI_API_KEY;
+        const activeKey = apiKey || (import.meta as any).env.VITE_GEMINI_API_KEY || (process as any).env.GEMINI_API_KEY;
         if (!activeKey) {
           throw new Error("API Key is missing. Please set VITE_GEMINI_API_KEY or use Settings.");
         }
         
-        const genAI = new GoogleGenerativeAI(activeKey);
-        chatRef.current = genAI.getGenerativeModel({
-          model: "gemini-3-flash-preview",
-          systemInstruction: SYSTEM_INSTRUCTION,
-        }).startChat();
+        const ai = new GoogleGenAI({ apiKey: activeKey });
+        chatRef.current = ai.chats.create({
+          model: "gemini-3.1-flash-lite-preview",
+          config: {
+            systemInstruction: SYSTEM_INSTRUCTION,
+          },
+        });
       }
 
-      const result = await chatRef.current.sendMessage(input);
-      const response = await result.response;
-      const text = response.text();
+      const response = await chatRef.current.sendMessage({ message: input });
+      const text = response.text;
       
       const modelMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -197,6 +203,14 @@ export default function App() {
     setIsSettingsOpen(false);
   };
 
+  const handleFeedback = (messageId: string, feedback: 'up' | 'down') => {
+    setMessages(prev => prev.map(msg => 
+      msg.id === messageId 
+        ? { ...msg, feedback: msg.feedback === feedback ? undefined : feedback } 
+        : msg
+    ));
+  };
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[#F5F5F7]">
       {/* Sidebar - Desktop */}
@@ -220,11 +234,6 @@ export default function App() {
               icon={<Trash2 size={18} />} 
               label="Clear Chat" 
               onClick={clearChat} 
-            />
-            <SidebarItem 
-              icon={<Settings size={18} />} 
-              label="Settings" 
-              onClick={() => setIsSettingsOpen(true)} 
             />
             <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider text-center pt-4">
               Sharda Kumari • PMP AI
@@ -264,13 +273,6 @@ export default function App() {
             >
               <Plus size={20} />
             </button>
-            <button 
-              onClick={() => setIsSettingsOpen(true)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500"
-              title="Settings"
-            >
-              <Settings size={20} />
-            </button>
           </div>
         </header>
 
@@ -304,10 +306,37 @@ export default function App() {
                       <ReactMarkdown>{msg.content}</ReactMarkdown>
                     </div>
                     <div className={cn(
-                      "text-[10px] mt-2 opacity-50 font-medium",
-                      msg.role === 'user' ? "text-right" : "text-left"
+                      "flex items-center justify-between mt-2",
+                      msg.role === 'user' ? "flex-row-reverse" : "flex-row"
                     )}>
-                      {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      <div className="text-[10px] opacity-50 font-medium">
+                        {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                      
+                      {msg.role === 'model' && (
+                        <div className="flex items-center gap-2 ml-4">
+                          <button
+                            onClick={() => handleFeedback(msg.id, 'up')}
+                            className={cn(
+                              "p-1 rounded-md transition-colors",
+                              msg.feedback === 'up' ? "text-blue-600 bg-blue-50" : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+                            )}
+                            title="Helpful"
+                          >
+                            <ThumbsUp size={12} fill={msg.feedback === 'up' ? "currentColor" : "none"} />
+                          </button>
+                          <button
+                            onClick={() => handleFeedback(msg.id, 'down')}
+                            className={cn(
+                              "p-1 rounded-md transition-colors",
+                              msg.feedback === 'down' ? "text-red-600 bg-red-50" : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+                            )}
+                            title="Not helpful"
+                          >
+                            <ThumbsDown size={12} fill={msg.feedback === 'down' ? "currentColor" : "none"} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
 
